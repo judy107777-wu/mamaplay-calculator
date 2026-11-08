@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>烘焙套券換購計算機</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* 左：輸入卡；右：試算結果＋兩則可複製訊息。手機時上下堆疊 */
+  :root {
+    --bg: #fbf7f2; --card: #ffffff; --ink: #3a2e28; --muted: #85766c;
+    --line: #eadfd4; --accent: #c9653f; --accent-soft: #fbe9e1; --on-accent: #ffffff;
+    --ok: #3a8655; --ok-soft: #e5f3e9; --warn: #9a6416; --warn-soft: #fdf3dc;
+    --err: #a1342a; --err-soft: #fde4e1; --field: #ffffff; --msg-bg: #f4f8ee; --opt-bg: #fffdfb;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+    --bg: #1f1a17; --card: #2a2420; --ink: #f1e8e1; --muted: #b3a398;
+    --line: #42382f; --accent: #e3825d; --accent-soft: #43281d; --on-accent: #1f1a17;
+    --ok: #7fc795; --ok-soft: #1f3526; --warn: #e6b45f; --warn-soft: #3a2e17;
+    --err: #f09a8f; --err-soft: #43221e; --field: #231e1a; --msg-bg: #232a1f; --opt-bg: #2d2622;
+    color-scheme: dark; } }
+  :root[data-theme="dark"] {
+    --bg: #1f1a17; --card: #2a2420; --ink: #f1e8e1; --muted: #b3a398;
+    --line: #42382f; --accent: #e3825d; --accent-soft: #43281d; --on-accent: #1f1a17;
+    --ok: #7fc795; --ok-soft: #1f3526; --warn: #e6b45f; --warn-soft: #3a2e17;
+    --err: #f09a8f; --err-soft: #43221e; --field: #231e1a; --msg-bg: #232a1f; --opt-bg: #2d2622;
+    color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+    font-family: "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif; font-size: 16px; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding-block: 24px 48px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  h1 { font-size: 24px; margin: 0 0 4px; text-wrap: balance; }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+  .grid { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: start; }
+  .grid > * { min-width: 0; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; min-width: 0; }
+  @media (max-width: 480px) { .card { padding: 14px; } }
+  .card h2 { font-size: 17px; margin: 0 0 14px; }
+  label { display: block; font-weight: bold; font-size: 15px; margin: 14px 0 6px; }
+  label:first-of-type { margin-top: 0; }
+  .hint { font-weight: normal; color: var(--muted); font-size: 13px; }
+  input[type=number] { width: 100%; font-size: 20px; padding: 8px 10px; border: 1px solid var(--line);
+    border-radius: 8px; font-family: inherit; color: var(--ink); background: var(--field); }
+  input[type=number]:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+  .prices { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .prices.six { grid-template-columns: repeat(6, 1fr); }
+  .prices button { background: var(--field); color: var(--ink); border: 1px solid var(--line); font-size: 17px;
+    padding: 10px 0; font-variant-numeric: tabular-nums; }
+  .prices button.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+  .badge { display: inline-block; margin-top: 6px; padding: 2px 10px; border-radius: 999px; font-size: 13px; }
+  .badge.k { background: var(--ok-soft); color: var(--ok); }
+  .badge.n { background: var(--accent-soft); color: var(--accent); }
+  .reminders { margin-top: 18px; padding: 12px 14px; background: var(--warn-soft); border-radius: 10px;
+    font-size: 14px; line-height: 1.7; }
+  .reminders b { color: var(--warn); }
+  .summary { display: grid; gap: 10px; margin-bottom: 18px; }
+  .opt { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--opt-bg); }
+  .opt .t { font-weight: bold; margin-bottom: 4px; }
+  .opt .big { font-size: 22px; color: var(--accent); font-weight: bold; font-variant-numeric: tabular-nums; }
+  .note { padding: 10px 14px; border-radius: 10px; font-size: 14px; margin-bottom: 14px; }
+  .note.warn { background: var(--warn-soft); color: var(--warn); }
+  .note.err { background: var(--err-soft); color: var(--err); }
+  .msgs { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .msgs > * { min-width: 0; }
+  @media (max-width: 1100px) { .msgs { grid-template-columns: 1fr; } }
+  .msg-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; }
+  .msg-head .n { font-weight: bold; }
+  .msg-head .n small { display: block; font-weight: normal; color: var(--muted); font-size: 12px; }
+  button { font-family: inherit; font-size: 15px; font-weight: bold; padding: 8px 16px; border-radius: 8px;
+    border: none; background: var(--accent); color: var(--on-accent); cursor: pointer; white-space: nowrap; }
+  button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  button.done { background: var(--ok); }
+  textarea { width: 100%; min-height: 520px; resize: vertical; font-family: inherit; font-size: 15px;
+    line-height: 1.6; padding: 12px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--msg-bg); color: var(--ink); }
+  @media (max-width: 900px) { textarea { min-height: 380px; } }
+  .reset { background: var(--field); color: var(--muted); border: 1px solid var(--line); margin-top: 16px; width: 100%; }
+</style>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="theme-color" content="#f3d36b">
+</head>
+<body>
+<div class="wrap">
+  <h1>烘焙套券換購計算機</h1>
+  <p class="sub">輸入一位客人的報名資料，產生活動前一天的換購通知（2則），複製後依序貼到 LINE。</p>
+
+  <div class="grid">
+    <div class="card">
+      <h2>客人報名資料</h2>
+      <label>活動定價（每組）</label>
+      <input id="price" type="hidden" value="1490">
+      <div class="prices" id="prices"></div>
+      <div id="priceBadge"></div>
+
+      <label for="groups">報名組數 <span class="hint">（1大1小為1組，手足同行不加費）</span></label>
+      <input id="groups" type="hidden" value="1">
+      <div class="prices six" id="groupBtns"></div>
+
+      <label for="adults">第二位大人人數 <span class="hint">（每位 +100 元，每組最多1位）</span></label>
+      <input id="adults" type="hidden" value="0">
+      <div class="prices six" id="adultBtns"></div>
+
+      <label for="paid">已匯款金額</label>
+      <input id="paid" type="number" inputmode="numeric" min="0" step="10" placeholder="例如 1590">
+
+      <label for="discount">其他優惠／減免 <span class="hint">（特殊情況才填，平常留 0）</span></label>
+      <input id="discount" type="number" inputmode="numeric" min="0" step="10" value="0">
+
+      <div class="reminders">
+        <b>發送前確認：</b><br>
+        ・報名時已用券的客人 → 不發<br>
+        ・客人自己主動買過套券 → 不發<br>
+        ・換購10+2張的客人 → LINE OA 名稱與上課名單要註記
+      </div>
+      <button class="reset" id="reset" type="button">清除，換下一位客人</button>
+    </div>
+
+    <div>
+      <div id="notes"></div>
+      <div class="summary" id="summary"></div>
+      <div class="msgs">
+        <div class="card">
+          <div class="msg-head">
+            <div class="n">第1則（先傳）<small>套券使用方式</small></div>
+            <button type="button" data-copy="msg1">複製第1則</button>
+          </div>
+          <textarea id="msg1" readonly></textarea>
+        </div>
+        <div class="card">
+          <div class="msg-head">
+            <div class="n">第2則（後傳）<small>開頭會顯示在 LINE 通知</small></div>
+            <button type="button" data-copy="msg2">複製第2則</button>
+          </div>
+          <textarea id="msg2" readonly></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== 計算規則 BEGIN ===== */
+var VOUCHER = 1490, ADULT_FEE = 100, KILO_MAX_PRICE = 1390;
+var PACKS = {
+  p3:  { key: 'p3',  name: '3+1張套券',  price: 3900,  v: 3,  k: 1 },
+  p6:  { key: 'p6',  name: '6+2張套券',  price: 7800,  v: 6,  k: 2 },
+  p10: { key: 'p10', name: '10+2張套券', price: 12000, v: 10, k: 2 }
+};
+
+function calcPack(pack, inp) {
+  var eligible = inp.price <= KILO_MAX_PRICE;
+  var kUsed = eligible ? Math.min(pack.k, inp.groups) : 0;
+  var vUsed = inp.groups - kUsed;
+  if (vUsed > pack.v) return null; // 套券不夠這麼多組用
+  var diffEach = Math.max(0, inp.price - VOUCHER);
+  var diffTotal = vUsed * diffEach;
+  var total = pack.price + diffTotal + inp.adults * ADULT_FEE - inp.discount;
+  return {
+    pack: pack, kUsed: kUsed, vUsed: vUsed, diffEach: diffEach, diffTotal: diffTotal,
+    topup: total - inp.paid, takeV: pack.v - vUsed, takeK: pack.k - kUsed
+  };
+}
+
+function calcAll(inp) {
+  var r3 = calcPack(PACKS.p3, inp), r6 = calcPack(PACKS.p6, inp), r10 = calcPack(PACKS.p10, inp);
+  var options, mode;
+  if (r3 && r3.topup <= 0) {
+    mode = 'overpaid';              // 已付比套券多：退費／加價變6張／加價變10張
+    options = [r3, r6, r10].filter(Boolean);
+  } else if (inp.groups >= 3) {
+    mode = 'multi';                 // 3組以上：兩種都列
+    options = r3 ? [r3, r10] : [r6, r10].filter(Boolean);
+  } else {
+    mode = 'single';
+    options = [r3];
+  }
+  options = options.filter(Boolean);
+  var originalDue = inp.groups * inp.price + inp.adults * ADULT_FEE - inp.discount;
+  return { mode: mode, options: options, eligible: inp.price <= KILO_MAX_PRICE, originalDue: originalDue };
+}
+/* ===== 計算規則 END ===== */
+
+/* ===== 訊息文字 BEGIN ===== */
+var ACCOUNT = [
+  '⭕媽媽play匯款帳號⭕',
+  '▌銀行：華泰銀行102',
+  '▌分行：營業部',
+  '▌帳號：0103-000071108',
+  '▌戶名：非墨事業有限公司'
+].join('\n');
+var SEP = '━━━━━━━━━━';
+
+function money(n) { return String(n); }
+
+function buildMsg1(res) {
+  var only3 = res.options.length === 1 && res.options[0].pack.key === 'p3';
+  var voucherRules = [
+    '・每張價值1490元',
+    '・沒有使用期限',
+    '・不限本人使用',
+    '・用於1490元以上課程，補差額即可（如1590元課程補100元）',
+    '・用於1390元以下課程，不退差額'
+  ];
+  var kiloRules = [
+    '・效期6個月',
+    '・不限本人使用',
+    '・前5個月僅可用於【適用千元券】課程，不用補差額',
+    '・效期截止當月，可當1000元折價券，當月所有活動可折價1000元'
+  ];
+  if (only3) voucherRules.push('・另有10+2張套券(12000元)優惠，意者另洽');
+  var packLines = ['您好，我們有優惠烘焙套券，說明如下：'];
+  res.options.forEach(function (o, i) {
+    if (i > 0) packLines.push('');
+    packLines.push('【' + o.pack.name + '(' + o.pack.price + '元)】', '1490烘焙券x' + o.pack.v + '＋千元券x' + o.pack.k);
+  });
+  return packLines.concat(['', '🎫 1490烘焙券'], voucherRules,
+    ['', '🎫 千元券(贈送)'], kiloRules).join('\n');
+}
+
+function takeHomeText(o) {
+  var parts = [];
+  if (o.takeV > 0) parts.push('1490烘焙券 ' + o.takeV + '張');
+  if (o.takeK > 0) parts.push('千元券 ' + o.takeK + '張');
+  return parts.join('＋') || '（無）';
+}
+
+function gainText(o) {
+  var parts = [];
+  if (o.takeV > 0) parts.push(o.takeV + '張1490烘焙券（價值共' + (o.takeV * VOUCHER) + '元）');
+  if (o.takeK > 0) parts.push('千元券' + o.takeK + '張');
+  return parts.join('＋');
+}
+
+function payLine(o, inp) {
+  if (o.vUsed === 0) return '・' + (inp.groups > 1 ? inp.groups + '組' : '') + '改由千元券支付';
+  if (o.kUsed === 0) {
+    if (inp.groups === 1) return '・改由1490烘焙券支付';
+    return '・' + inp.groups + '組改由1490烘焙券支付';
+  }
+  return '・' + inp.groups + '組改由套券支付\n　（' + o.kUsed + '組用千元券、' + o.vUsed + '組用1490烘焙券）';
+}
+
+function topupLines(o, inp) {
+  var lines = [];
+  if (o.topup > 0) {
+    lines.push('・補差額：' + o.topup + '元');
+    if (o.diffTotal > 0) lines.push('　（含' + inp.price + '元課程補差額' + o.diffTotal + '元）');
+  } else if (o.topup < 0) {
+    lines.push('・退還差額：' + (-o.topup) + '元');
+  } else {
+    lines.push('・不用再補差額');
+  }
+  return lines;
+}
+
+function optionBlock(o, inp, title, withGain) {
+  var lines = [title].concat(topupLines(o, inp), [payLine(o, inp), '・當天帶回：' + takeHomeText(o)]);
+  if (withGain && o.topup > 0) lines.push('💡加價 ' + o.topup + ' 元，就多帶回' + gainText(o));
+  return lines;
+}
+
+function buildMsg2(res, inp) {
+  var head = ['您好😊 明天見囉！', '歡迎參考划算的「烘焙套券」方案👇', '', SEP, '【您目前的報名】',
+    '・課程' + inp.price + '元 × ' + inp.groups + '組'];
+  if (inp.adults > 0) head.push('・第二位大人 × ' + inp.adults + '位(+' + (inp.adults * ADULT_FEE) + '元)');
+  if (inp.discount > 0) head.push('・優惠減免：-' + inp.discount + '元');
+  head.push('・已匯款：' + inp.paid + '元', SEP);
+
+  var body = [];
+  if (res.mode === 'single') {
+    var o = res.options[0];
+    body.push('💡加價 ' + o.topup + ' 元', '     就多帶回' + gainText(o), '');
+    body = body.concat(optionBlock(o, inp, '【換購 3+1張套券(3900元)】', false));
+    body.push(SEP);
+  } else {
+    var letters = ['A', 'B', 'C'];
+    res.options.forEach(function (o, i) {
+      var title;
+      if (res.mode === 'overpaid' && o.pack.key === 'p3') title = '【方案' + letters[i] + '：換購 3+1張套券(3900元)】';
+      else if (res.mode === 'overpaid') title = '【方案' + letters[i] + '：加價換購 ' + o.pack.name + '(' + o.pack.price + '元)】';
+      else title = '【方案' + letters[i] + '：換購 ' + o.pack.name + '(' + o.pack.price + '元)】';
+      body = body.concat(optionBlock(o, inp, title, true));
+      body.push(i < res.options.length - 1 ? '' : SEP);
+    });
+  }
+
+  var tail = ['', '【付款方式】', '現場現金、現場匯款、事前匯款都可以', '', ACCOUNT, '',
+    '活動後若想換購，可直接跟老師洽購，或是當日完成匯款，就可將本次活動計入優惠；原價支持我們，我們也是很開心喔!明天見❤️'];
+  return head.concat(body, tail).join('\n');
+}
+/* ===== 訊息文字 END ===== */
+
+/* ===== 畫面 ===== */
+var ids = ['price', 'groups', 'adults', 'paid', 'discount'];
+function num(id) { var v = document.getElementById(id).value; return v === '' ? NaN : Number(v); }
+
+// 已匯款預設 = 定價 × 組數；雅惠自己改過就不再自動帶
+var paidTouched = false;
+function autoPaid() {
+  if (paidTouched) return;
+  var p = Number(document.getElementById('price').value), g = Number(document.getElementById('groups').value);
+  if (p && g) document.getElementById('paid').value = p * g;
+}
+
+function render() {
+  autoPaid();
+  var inp = { price: num('price'), groups: num('groups'), adults: num('adults') || 0,
+    paid: num('paid'), discount: num('discount') || 0 };
+  var notes = document.getElementById('notes'), summary = document.getElementById('summary');
+  var m1 = document.getElementById('msg1'), m2 = document.getElementById('msg2');
+  var badge = document.getElementById('priceBadge');
+  notes.innerHTML = ''; summary.innerHTML = '';
+
+  badge.innerHTML = isNaN(inp.price) ? '' : (inp.price <= KILO_MAX_PRICE
+    ? '<span class="badge k">適用千元券課程（千元券當天直接用）</span>'
+    : '<span class="badge n">一般課程（' + (inp.price > VOUCHER
+        ? '1490券每組補差額 ' + (inp.price - VOUCHER) + ' 元' : '1490券免補差額') + '）</span>');
+
+  if (isNaN(inp.price) || isNaN(inp.groups) || isNaN(inp.paid) || inp.groups < 1) {
+    m1.value = ''; m2.value = '';
+    notes.innerHTML = '<div class="note warn">請填入已匯款金額。</div>';
+    return;
+  }
+  var errs = [];
+  if (inp.adults > inp.groups) errs.push('第二位大人人數超過組數（每組最多加1位大人），請確認。');
+  if (inp.groups > 12) errs.push('組數太多，請個別處理。');
+  if (errs.length) {
+    m1.value = ''; m2.value = '';
+    notes.innerHTML = '<div class="note err">' + errs.join('<br>') + '</div>';
+    return;
+  }
+
+  var res = calcAll(inp);
+  if (!res.options.length) {
+    m1.value = ''; m2.value = '';
+    notes.innerHTML = '<div class="note err">沒有適合的套券方案，請個別處理。</div>';
+    return;
+  }
+  if (res.originalDue !== inp.paid) {
+    var d = res.originalDue - inp.paid;
+    notes.innerHTML = '<div class="note warn">提醒：照定價應付 ' + res.originalDue + ' 元，已匯款 ' + inp.paid + ' 元，' +
+      (d > 0 ? '少 ' + d : '多 ' + (-d)) + ' 元。換購金額已用「已匯款」計算，請確認資料是否正確。</div>';
+  }
+  if (res.mode === 'overpaid') {
+    notes.innerHTML += '<div class="note warn">已匯款比 3+1張套券多，訊息會列出：退費／加價變6+2張／加價變10+2張。</div>';
+  }
+
+  summary.innerHTML = res.options.map(function (o) {
+    var amt = o.topup > 0 ? '補 ' + o.topup + ' 元' : (o.topup < 0 ? '退 ' + (-o.topup) + ' 元' : '不用補');
+    return '<div class="opt"><div class="t">' + o.pack.name + '（' + o.pack.price + '元）</div>' +
+      '<div class="big">' + amt + '</div>' +
+      '<div>明天用券：' + (o.kUsed ? '千元券 ' + o.kUsed + ' 張　' : '') + (o.vUsed ? '1490券 ' + o.vUsed + ' 張' : '') +
+      '　｜　當天取：' + takeHomeText(o) + '</div></div>';
+  }).join('');
+
+  m1.value = buildMsg1(res);
+  m2.value = buildMsg2(res, inp);
+}
+
+document.getElementById('paid').addEventListener('focus', function (e) { e.target.select(); });
+document.getElementById('paid').addEventListener('input', function (e) {
+  paidTouched = e.target.value !== '';
+});
+ids.forEach(function (id) { document.getElementById(id).addEventListener('input', render); });
+
+var PRICE_OPTIONS = [1190, 1290, 1390, 1490, 1590, 1690, 1790], DEFAULT_PRICE = 1490;
+
+// 一排按鈕：點了就寫進對應的隱藏欄位並標示選取
+function buildButtons(boxId, inputId, values, onPick) {
+  var box = document.getElementById(boxId), cur = Number(document.getElementById(inputId).value);
+  box.innerHTML = '';
+  values.forEach(function (v) {
+    var b = document.createElement('button');
+    b.type = 'button'; b.textContent = v;
+    if (v === cur) b.classList.add('on');
+    b.addEventListener('click', function () { pick(boxId, inputId, v); if (onPick) onPick(v); render(); });
+    box.appendChild(b);
+  });
+}
+function pick(boxId, inputId, v) {
+  document.getElementById(inputId).value = v;
+  document.querySelectorAll('#' + boxId + ' button').forEach(function (b) {
+    b.classList.toggle('on', Number(b.textContent) === v);
+  });
+}
+function range(a, b) { var r = []; for (var i = a; i <= b; i++) r.push(i); return r; }
+
+// 第二位大人：每組最多1位，所以按鈕是 0 ~ 組數
+function buildAdultButtons() {
+  var g = Number(document.getElementById('groups').value) || 1;
+  var adults = document.getElementById('adults');
+  if (Number(adults.value) > g) adults.value = g;
+  buildButtons('adultBtns', 'adults', range(0, g));
+}
+
+function setPrice(p) { pick('prices', 'price', p); render(); }
+
+buildButtons('prices', 'price', PRICE_OPTIONS);
+buildButtons('groupBtns', 'groups', range(1, 12), buildAdultButtons);
+buildAdultButtons();
+
+document.querySelectorAll('[data-copy]').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    var ta = document.getElementById(btn.getAttribute('data-copy'));
+    if (!ta.value) return;
+    var label = btn.textContent;
+    function ok() { btn.textContent = '已複製 ✓'; btn.classList.add('done');
+      setTimeout(function () { btn.textContent = label; btn.classList.remove('done'); }, 1500); }
+    function fallback() { ta.removeAttribute('readonly'); ta.select(); document.execCommand('copy');
+      ta.setAttribute('readonly', ''); window.getSelection().removeAllRanges(); ok(); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(ta.value).then(ok, fallback);
+    } else { fallback(); }
+  });
+});
+
+document.getElementById('reset').addEventListener('click', function () {
+  document.getElementById('paid').value = '';
+  paidTouched = false;
+  document.getElementById('discount').value = '0';
+  pick('groupBtns', 'groups', 1);
+  document.getElementById('adults').value = '0';
+  buildAdultButtons();
+  setPrice(DEFAULT_PRICE);
+  document.getElementById('paid').focus();
+});
+
+setPrice(DEFAULT_PRICE);
+</script>
+</body>
+</html>

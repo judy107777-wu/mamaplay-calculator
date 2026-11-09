@@ -230,9 +230,9 @@ function takeHomeText(o) {
 
 function gainText(o) {
   var parts = [];
-  if (o.takeV > 0) parts.push(o.takeV + '張1490烘焙券（價值共' + (o.takeV * VOUCHER) + '元）');
-  if (o.takeK > 0) parts.push('千元券' + o.takeK + '張');
-  return parts.join('＋');
+  if (o.takeV > 0) parts.push(o.takeV + '張1490烘焙券');
+  if (o.takeK > 0) parts.push(o.takeK + '張千元券');
+  return parts.join('＋') + '（價值共' + (o.takeV * VOUCHER + o.takeK * 1000) + '元）';
 }
 
 function payLine(o, inp) {

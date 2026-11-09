@@ -31,7 +31,8 @@
   .wrap { max-width: 1180px; margin: 0 auto; padding-block: 24px 48px;
     padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
   h1 { font-size: 24px; margin: 0 0 4px; text-wrap: balance; }
-  .sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
+  .sub { color: var(--muted); margin: 0 0 4px; font-size: 14px; }
+  .ver { color: var(--muted); margin: 0 0 20px; font-size: 12px; font-variant-numeric: tabular-nums; }
   .grid { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: start; }
   .grid > * { min-width: 0; }
   @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
@@ -87,6 +88,7 @@
 <div class="wrap">
   <h1>烘焙套券換購計算機</h1>
   <p class="sub">輸入一位客人的報名資料，產生活動前一天的換購通知（2則），複製後依序貼到 LINE。</p>
+  <p class="ver">版本：<span id="ver">2026/11/09</span></p>
 
   <div class="grid">
     <div class="card">
